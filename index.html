@@ -3,41 +3,279 @@
 <head>
   <meta charset="UTF-8">
   <title>Macoy 2025 Catalog</title>
-  <script src="js/jquery-3.7.1.min.js"></script>
-  <script src="js/turn.min.js"></script>
-  <script src="js/zoom.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <style>
-    body { background-color: #222; margin: 0; padding: 0; }
-    #flipbook { width: 100%; max-width: 1000px; height: 650px; margin: 40px auto; }
-    .page { width: 500px; height: 650px; background: white; }
-    .page img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; }
-    .zoom-overlay { background: rgba(0,0,0,0.9); z-index: 9999; }
+    body { 
+      background-color: #222; 
+      margin: 0; 
+      padding: 0; 
+      font-family: Arial, sans-serif;
+    }
+    
+    #loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 18px;
+      z-index: 1000;
+    }
+    
+    #flipbook { 
+      width: 100%; 
+      max-width: 1000px; 
+      height: 650px; 
+      margin: 40px auto;
+      background: #333;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    
+    .page { 
+      width: 500px; 
+      height: 650px; 
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: #333;
+      border: 1px solid #ddd;
+    }
+    
+    .page img { 
+      width: 100%; 
+      height: 100%; 
+      object-fit: contain; 
+      cursor: zoom-in; 
+    }
+    
+    .page.placeholder {
+      background: linear-gradient(45deg, #f0f0f0 25%, transparent 25%, transparent 75%, #f0f0f0 75%),
+                  linear-gradient(45deg, #f0f0f0 25%, transparent 25%, transparent 75%, #f0f0f0 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 10px 10px;
+    }
+    
+    .zoom-overlay { 
+      background: rgba(0,0,0,0.9); 
+      z-index: 9999; 
+    }
+    
+    .controls {
+      text-align: center;
+      margin: 20px 0;
+    }
+    
+    .controls button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin: 0 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    
+    .controls button:hover {
+      background: #45a049;
+    }
+    
+    .controls button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+    
+    .page-info {
+      text-align: center;
+      color: white;
+      margin: 10px 0;
+      font-size: 16px;
+    }
+    
+    .error-msg {
+      color: #ff6b6b;
+      text-align: center;
+      margin: 20px;
+      padding: 20px;
+      background: rgba(255, 107, 107, 0.1);
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
+  <div id="loading">Loading catalog...</div>
+  <div id="error-container"></div>
+  
+  <div class="controls">
+    <button id="prevBtn">← Previous</button>
+    <button id="nextBtn">Next →</button>
+  </div>
+  
+  <div class="page-info">
+    <span id="pageDisplay">Page 1 of 64</span>
+  </div>
+  
   <div id="flipbook"></div>
 
- <script src="js/jquery-3.7.1.min.js"></script>
-<script src="js/turn.min.js"></script>
+  <script>
+    $(document).ready(function () {
+      console.log('Document ready, initializing flipbook...');
+      
+      const pageCount = 64;
+      const $flipbook = $('#flipbook');
+      const $loading = $('#loading');
+      const $errorContainer = $('#error-container');
+      let imagesLoaded = 0;
+      let currentPage = 1;
 
-<script>
-  $(document).ready(function () {
-    const pageCount = 64;
-    const $flipbook = $('#flipbook');
+      // Function to show error message
+      function showError(message) {
+        $errorContainer.html(`<div class="error-msg">${message}</div>`);
+        $loading.hide();
+      }
 
-    for (let i = 1; i <= pageCount; i++) {
-      const padded = String(i).padStart(3, '0');
-      const pageDiv = `
-        <div class="page">
-          <img src="page_${padded}.jpg" alt="Page ${i}" />
-        </div>`;
-      $flipbook.append(pageDiv);
-    }
+      // Function to update page display
+      function updatePageDisplay() {
+        $('#pageDisplay').text(`Page ${currentPage} of ${pageCount}`);
+        $('#prevBtn').prop('disabled', currentPage <= 1);
+        $('#nextBtn').prop('disabled', currentPage >= pageCount);
+      }
 
-    $flipbook.turn({
-      width: 1000,
-      height: 650,
-      autoCenter: true
+      // Function to check if image exists
+      function checkImage(src) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(true);
+          img.onerror = () => resolve(false);
+          img.src = src;
+        });
+      }
+
+      // Create pages with fallback for missing images
+      async function createPages() {
+        for (let i = 1; i <= pageCount; i++) {
+          const padded = String(i).padStart(3, '0');
+          const imageSrc = `page_${padded}.jpg`;
+          
+          // Check if image exists
+          const imageExists = await checkImage(imageSrc);
+          
+          let pageContent;
+          if (imageExists) {
+            pageContent = `<img src="${imageSrc}" alt="Page ${i}" onload="imageLoaded()" onerror="imageError(this, ${i})" />`;
+          } else {
+            pageContent = `<div>Page ${i}<br><small>Image not found: ${imageSrc}</small></div>`;
+          }
+          
+          const pageDiv = `<div class="page ${imageExists ? '' : 'placeholder'}">${pageContent}</div>`;
+          $flipbook.append(pageDiv);
+        }
+        
+        initializeTurnJS();
+      }
+
+      // Initialize Turn.js
+      function initializeTurnJS() {
+        console.log('Initializing Turn.js...');
+        
+        // Check if Turn.js is loaded
+        if (typeof $.fn.turn === 'undefined') {
+          showError('Turn.js library failed to load. Please check your internet connection and try refreshing the page.');
+          return;
+        }
+
+        try {
+          $flipbook.turn({
+            width: 1000,
+            height: 650,
+            autoCenter: true,
+            acceleration: true,
+            gradients: true,
+            elevation: 50
+          });
+
+          // Bind turn events
+          $flipbook.bind('turned', function(event, page, view) {
+            currentPage = page;
+            updatePageDisplay();
+            console.log('Turned to page:', page);
+          });
+
+          $loading.hide();
+          updatePageDisplay();
+          console.log('Flipbook initialized successfully!');
+          
+        } catch (error) {
+          console.error('Error initializing Turn.js:', error);
+          showError(`Failed to initialize flipbook: ${error.message}`);
+        }
+      }
+
+      // Navigation button handlers
+      $('#prevBtn').click(function() {
+        if ($flipbook.turn) {
+          $flipbook.turn('previous');
+        }
+      });
+
+      $('#nextBtn').click(function() {
+        if ($flipbook.turn) {
+          $flipbook.turn('next');
+        }
+      });
+
+      // Keyboard navigation
+      $(document).keydown(function(e) {
+        if (!$flipbook.turn) return;
+        
+        if (e.keyCode === 37) { // Left arrow
+          $flipbook.turn('previous');
+        } else if (e.keyCode === 39) { // Right arrow
+          $flipbook.turn('next');
+        }
+      });
+
+      // Global functions for image loading
+      window.imageLoaded = function() {
+        imagesLoaded++;
+        console.log(`Image loaded: ${imagesLoaded}/${pageCount}`);
+      };
+
+      window.imageError = function(img, pageNum) {
+        console.warn(`Failed to load image for page ${pageNum}:`, img.src);
+        $(img).parent().addClass('placeholder').html(`<div>Page ${pageNum}<br><small>Image failed to load</small></div>`);
+      };
+
+      // Start creating pages
+      createPages();
     });
-  });
-</script>
+
+    // Handle Turn.js loading error
+    window.addEventListener('error', function(e) {
+      if (e.filename && e.filename.includes('turn')) {
+        console.error('Turn.js failed to load:', e);
+        $('#error-container').html('<div class="error-msg">Failed to load Turn.js library. Please check your internet connection.</div>');
+        $('#loading').hide();
+      }
+    });
+  </script>
+
+  <!-- Load Turn.js from CDN as fallback -->
+  <script>
+    // Check if we need to load Turn.js from CDN
+    if (typeof $.fn.turn === 'undefined') {
+      console.log('Loading Turn.js from CDN...');
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/turn.js/3/turn.min.js';
+      script.onerror = function() {
+        $('#error-container').html('<div class="error-msg">Could not load Turn.js library from CDN. Please check your internet connection.</div>');
+        $('#loading').hide();
+      };
+      document.head.appendChild(script);
+    }
+  </script>
+</body>
+</html>
