@@ -17,33 +17,27 @@
 <body>
   <div id="flipbook"></div>
 
-  <!-- Load scripts at the end of body -->
-<script src="js/jquery-3.7.1.min.js"></script>
+ <script src="js/jquery-3.7.1.min.js"></script>
 <script src="js/turn.min.js"></script>
 
 <script>
-  document.addEventListener("DOMContentLoaded", function () {
-    const flipbook = document.getElementById("flipbook");
+  $(document).ready(function () {
     const pageCount = 64;
+    const $flipbook = $('#flipbook');
 
     for (let i = 1; i <= pageCount; i++) {
       const padded = String(i).padStart(3, '0');
-      const page = document.createElement("div");
-      page.className = "page";
-      const img = document.createElement("img");
-      img.src = `page_${padded}.jpg`;
-      img.alt = `Page ${i}`;
-      page.appendChild(img);
-      flipbook.appendChild(page);
+      const pageDiv = `
+        <div class="page">
+          <img src="page_${padded}.jpg" alt="Page ${i}" />
+        </div>`;
+      $flipbook.append(pageDiv);
     }
 
-    // Wait a bit to ensure images are loaded
-    setTimeout(() => {
-      $('#flipbook').turn({
-        width: 1000,
-        height: 650,
-        autoCenter: true
-      });
-    }, 200);
+    $flipbook.turn({
+      width: 1000,
+      height: 650,
+      autoCenter: true
+    });
   });
 </script>
