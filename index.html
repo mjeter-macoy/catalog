@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Macoy 2025 Catalog</title>
-  <script src="https://cdn.jsdelivr.net/gh/blasten/turn.js@4/turn.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <style>
     body { 
       background-color: #222; 
@@ -364,23 +364,19 @@
         }
       });
 
-     function openZoom(imageSrc) {
-  $zoomedImage.attr('src', imageSrc);
-  zoomLevel = 1;
-  imageX = 0;
-  imageY = 0;
-  updateZoomDisplay();
-
-  setTimeout(() => {
-    $zoomOverlay.fadeIn(300);
-  }, 50);
-  
-  // Disable flipbook interaction while zoomed
-  if ($flipbook.turn) {
-    $flipbook.turn('disable', true);
-  }
-}
-
+      function openZoom(imageSrc) {
+        $zoomedImage.attr('src', imageSrc);
+        $zoomOverlay.fadeIn(300);
+        zoomLevel = 1;
+        imageX = 0;
+        imageY = 0;
+        updateZoomDisplay();
+        
+        // Disable flipbook interaction while zoomed
+        if ($flipbook.turn) {
+          $flipbook.turn('disable', true);
+        }
+      }
 
       function closeZoom() {
         $zoomOverlay.fadeOut(300);
