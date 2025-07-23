@@ -59,8 +59,60 @@
     }
     
     .zoom-overlay { 
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       background: rgba(0,0,0,0.9); 
-      z-index: 9999; 
+      z-index: 9999;
+      display: none;
+      cursor: zoom-out;
+    }
+    
+    .zoom-image {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      max-width: 95%;
+      max-height: 95%;
+      object-fit: contain;
+      transition: transform 0.3s ease;
+    }
+    
+    .zoom-controls {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+    }
+    
+    .zoom-controls button {
+      background: rgba(255,255,255,0.9);
+      border: none;
+      padding: 10px 15px;
+      margin: 0 5px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      color: #333;
+    }
+    
+    .zoom-controls button:hover {
+      background: white;
+    }
+    
+    .zoom-info {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      background: rgba(0,0,0,0.7);
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 14px;
     }
     
     .controls {
@@ -119,6 +171,19 @@
   </div>
   
   <div id="flipbook"></div>
+
+  <!-- Zoom Overlay -->
+  <div id="zoomOverlay" class="zoom-overlay">
+    <div class="zoom-controls">
+      <button id="zoomIn">+</button>
+      <button id="zoomOut">-</button>
+      <button id="closeZoom">✕</button>
+    </div>
+    <img id="zoomedImage" class="zoom-image" />
+    <div class="zoom-info">
+      <span id="zoomLevel">100%</span> | Click and drag to pan | Scroll to zoom
+    </div>
+  </div>
 
   <script>
     $(document).ready(function () {
@@ -229,6 +294,33 @@
 
       // Keyboard navigation
       $(document).keydown(function(e) {
+        if ($zoomOverlay.is(':visible')) {
+          switch(e.keyCode) {
+            case 27: // Escape
+              closeZoom();
+              break;
+            case 187: // Plus
+            case 61:  // Plus (Firefox)
+              e.preventDefault();
+              zoomIn();
+              break;
+            case 189: // Minus
+            case 173: // Minus (Firefox)
+              e.preventDefault();
+              zoomOut();
+              break;
+            case 48: // 0 key - reset zoom
+              e.preventDefault();
+              zoomLevel = 1;
+              imageX = 0;
+              imageY = 0;
+              updateZoomDisplay();
+              break;
+          }
+          return;
+        }
+        
+        // Existing flipbook navigation
         if (!$flipbook.turn) return;
         
         if (e.keyCode === 37) { // Left arrow
@@ -251,6 +343,181 @@
 
       // Start creating pages
       createPages();
+
+      // Zoom functionality
+      let zoomLevel = 1;
+      let isDragging = false;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let imageX = 0;
+      let imageY = 0;
+      const $zoomOverlay = $('#zoomOverlay');
+      const $zoomedImage = $('#zoomedImage');
+      const $zoomLevel = $('#zoomLevel');
+
+      // Image click handler for zoom
+      $(document).on('click', '.page img', function(e) {
+        e.preventDefault();
+        const imgSrc = $(this).attr('src');
+        if (imgSrc && !imgSrc.includes('data:')) {
+          openZoom(imgSrc);
+        }
+      });
+
+      function openZoom(imageSrc) {
+        $zoomedImage.attr('src', imageSrc);
+        $zoomOverlay.fadeIn(300);
+        zoomLevel = 1;
+        imageX = 0;
+        imageY = 0;
+        updateZoomDisplay();
+        
+        // Disable flipbook interaction while zoomed
+        if ($flipbook.turn) {
+          $flipbook.turn('disable', true);
+        }
+      }
+
+      function closeZoom() {
+        $zoomOverlay.fadeOut(300);
+        zoomLevel = 1;
+        imageX = 0;
+        imageY = 0;
+        
+        // Re-enable flipbook interaction
+        if ($flipbook.turn) {
+          $flipbook.turn('disable', false);
+        }
+      }
+
+      function updateZoomDisplay() {
+        const percentage = Math.round(zoomLevel * 100);
+        $zoomLevel.text(percentage + '%');
+        $zoomedImage.css({
+          'transform': `translate(calc(-50% + ${imageX}px), calc(-50% + ${imageY}px)) scale(${zoomLevel})`,
+          'cursor': zoomLevel > 1 ? 'grab' : 'zoom-in'
+        });
+      }
+
+      function zoomIn() {
+        zoomLevel = Math.min(zoomLevel * 1.3, 5);
+        updateZoomDisplay();
+      }
+
+      function zoomOut() {
+        zoomLevel = Math.max(zoomLevel / 1.3, 0.5);
+        if (zoomLevel <= 1) {
+          imageX = 0;
+          imageY = 0;
+        }
+        updateZoomDisplay();
+      }
+
+      // Zoom control handlers
+      $('#zoomIn').click(zoomIn);
+      $('#zoomOut').click(zoomOut);
+      $('#closeZoom').click(closeZoom);
+
+      // Close zoom on overlay click (but not on image)
+      $zoomOverlay.click(function(e) {
+        if (e.target === this) {
+          closeZoom();
+        }
+      });
+
+      // Mouse wheel zoom
+      $zoomOverlay.on('wheel', function(e) {
+        e.preventDefault();
+        if (e.originalEvent.deltaY < 0) {
+          zoomIn();
+        } else {
+          zoomOut();
+        }
+      });
+
+      // Touch/mouse drag functionality
+      $zoomedImage.on('mousedown touchstart', function(e) {
+        if (zoomLevel <= 1) return;
+        
+        e.preventDefault();
+        isDragging = true;
+        $(this).css('cursor', 'grabbing');
+        
+        const clientX = e.type === 'touchstart' ? e.originalEvent.touches[0].clientX : e.clientX;
+        const clientY = e.type === 'touchstart' ? e.originalEvent.touches[0].clientY : e.clientY;
+        
+        dragStartX = clientX - imageX;
+        dragStartY = clientY - imageY;
+      });
+
+      $(document).on('mousemove touchmove', function(e) {
+        if (!isDragging || zoomLevel <= 1) return;
+        
+        e.preventDefault();
+        const clientX = e.type === 'touchmove' ? e.originalEvent.touches[0].clientX : e.clientX;
+        const clientY = e.type === 'touchmove' ? e.originalEvent.touches[0].clientY : e.clientY;
+        
+        imageX = clientX - dragStartX;
+        imageY = clientY - dragStartY;
+        
+        // Limit dragging to keep image in bounds
+        const maxX = window.innerWidth * 0.3;
+        const maxY = window.innerHeight * 0.3;
+        imageX = Math.max(-maxX, Math.min(maxX, imageX));
+        imageY = Math.max(-maxY, Math.min(maxY, imageY));
+        
+        updateZoomDisplay();
+      });
+
+      $(document).on('mouseup touchend', function() {
+        if (isDragging) {
+          isDragging = false;
+          $zoomedImage.css('cursor', zoomLevel > 1 ? 'grab' : 'zoom-in');
+        }
+      });
+
+      // Keyboard controls for zoom
+      $(document).keydown(function(e) {
+        if ($zoomOverlay.is(':visible')) {
+          switch(e.keyCode) {
+            case 27: // Escape
+              closeZoom();
+              break;
+            case 187: // Plus
+            case 61:  // Plus (Firefox)
+              e.preventDefault();
+              zoomIn();
+              break;
+            case 189: // Minus
+            case 173: // Minus (Firefox)
+              e.preventDefault();
+              zoomOut();
+              break;
+            case 48: // 0 key - reset zoom
+              e.preventDefault();
+              zoomLevel = 1;
+              imageX = 0;
+              imageY = 0;
+              updateZoomDisplay();
+              break;
+          }
+          return;
+        }
+        
+        // Existing flipbook navigation
+        if (!$flipbook.turn) return;
+        
+        if (e.keyCode === 37) { // Left arrow
+          $flipbook.turn('previous');
+        } else if (e.keyCode === 39) { // Right arrow
+          $flipbook.turn('next');
+        }
+      });
+
+      // Prevent context menu on zoomed image
+      $zoomedImage.on('contextmenu', function(e) {
+        e.preventDefault();
+      });
     });
 
     // Handle Turn.js loading error
